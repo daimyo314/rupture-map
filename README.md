@@ -2,6 +2,8 @@
 
 A private, local browser map for StarRupture. This early version provides separate worlds, an extracted preliminary game map, and markers with notes. Live position tracking uses a read-only process reader for game build CL127004. The game remains unchanged.
 
+**Windows:** The manual map can be tried, but live tracking has not been ported or tested. See the [Windows guide](docs/WINDOWS.md) for setup and the work needed for native tracking.
+
 ## Run
 
 From this directory run `python3 server.py`, then open http://127.0.0.1:8765/ in your browser. Stop the server with Ctrl+C. Python's standard library is the only runtime dependency; no internet connection is needed.

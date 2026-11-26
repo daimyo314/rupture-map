@@ -6,6 +6,7 @@ from pathlib import Path
 import buildings as building_tracker
 import base_tracker
 import infection_tracker
+import wave_visuals
 
 ROOT = Path(__file__).resolve().parent
 GAME = Path('/legames/steamapps/common/StarRupture')
@@ -167,7 +168,9 @@ def position():
                     if math.isfinite(value) and abs(value) < 1000000: yaw = value % 360
                 except (OSError, RuntimeError, struct.error):
                     pass
-                return {'ok':True,'x':xyz[0],'y':xyz[1],'z':xyz[2],'yaw':yaw,'time':time.time(),'connection':connection_info(read,world),'wave':wave_status(read,ptr,world),'radiation_level':radiation_status(read,ptr,world),'other_players':other_player_markers(read,ptr,world,pawn)}
+                wave=wave_status(read,ptr,world)
+                if wave is not None:wave['visuals']=wave_visuals.read_status(fd,base)
+                return {'ok':True,'x':xyz[0],'y':xyz[1],'z':xyz[2],'yaw':yaw,'time':time.time(),'connection':connection_info(read,world),'wave':wave,'radiation_level':radiation_status(read,ptr,world),'other_players':other_player_markers(read,ptr,world,pawn)}
             finally: os.close(fd)
         except (FileNotFoundError, ProcessLookupError): continue
         except PermissionError: raise RuntimeError('Cannot read game process; start the tracker with the same user and check Linux process permissions')

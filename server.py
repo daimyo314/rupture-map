@@ -5,6 +5,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import buildings as building_tracker
 import base_tracker
+import infection_tracker
 
 ROOT = Path(__file__).resolve().parent
 GAME = Path('/legames/steamapps/common/StarRupture')
@@ -78,6 +79,55 @@ def wave_status(read, ptr, world):
         return {'seconds':max(0,remaining),'phase':phase,'paused':bool(paused),'pending':remaining<=0,'clock':clock,'deadline':deadline,'frequency':frequency}
     except (OSError,RuntimeError,struct.error):return None
 
+def radiation_status(read, ptr, world):
+    # CL127004: the map replication helper carries the world's radiation level.
+    try:
+        game_state=ptr(world+0x1b0); helper=ptr(game_state+0x368)
+        level=struct.unpack('<i',read(helper+0x468,4))[0]
+        return level if level in (0,1) else None
+    except (OSError,RuntimeError,struct.error):return None
+
+def other_player_markers(read, ptr, world, pawn):
+    # Replicated map-marker positions may update intermittently.
+    try:
+        def u64(a): return struct.unpack('<Q',read(a,8))[0]
+        def i32(a): return struct.unpack('<i',read(a,4))[0]
+        def string(a):
+            address=u64(a); size=i32(a+8)
+            if not 1<=size<=128:return ''
+            return read(address,size*2).decode('utf-16le').rstrip('\0')
+        state=ptr(world+0x1b0);helper=ptr(state+0x368)
+        local_state=ptr(pawn+0x6e0); local_name=string(local_state+0x348)
+        if not local_name:return None
+        array=u64(state+0x2c0); count=i32(state+0x2c8)
+        if not 0<=count<=32:return None
+        present=set()
+        for i in range(count):
+            ps=u64(array+i*8)
+            if not ps:continue
+            flags=read(ps+0x2b2,1)[0]
+            if not flags&0x20:present.add(string(ps+0x348))
+        records=u64(helper+0x7b8); count=i32(helper+0x7c0)
+        if not 0<=count<=32:return None
+        result=[]
+        for i in range(count):
+            item=records+i*0x40;name=string(item+0x10)
+            if not name or name not in present:continue
+            x,y,r,g,b,a,yaw,flags=struct.unpack('<7fB',read(item+0x20,29))
+            if not all(math.isfinite(v) for v in (x,y,r,g,b,a)) or abs(x)>1e7 or abs(y)>1e7:continue
+            color=[max(0,min(1,c)) for c in (r,g,b)]
+            result.append({'id':i32(item),'name':name,'x':x,'y':y,'yaw':yaw%360 if math.isfinite(yaw) and abs(yaw)<1e6 else None,'color':color,'flags':flags})
+        # Equal names cannot identify the local marker safely. Keep all ambiguous
+        # records rather than silently hiding another player.
+        local_matches=[v for v in result if v['name']==local_name]
+        if len(local_matches)==1:result.remove(local_matches[0])
+        elif len(local_matches)>1:
+            for v in local_matches:v['possibly_local']=True
+        ids=[v['id'] for v in result]
+        if len(ids)!=len(set(ids)):return None
+        return result
+    except (OSError,RuntimeError,struct.error,UnicodeError,ValueError):return None
+
 def position():
     manifest = (GAME.parent.parent / 'appmanifest_1631270.acf').read_text() if (GAME.parent.parent / 'appmanifest_1631270.acf').is_file() else ''
     if not (GAME / 'CL127004').is_file() or not re.search(r'"buildid"\s+"26781824"', manifest):
@@ -117,7 +167,7 @@ def position():
                     if math.isfinite(value) and abs(value) < 1000000: yaw = value % 360
                 except (OSError, RuntimeError, struct.error):
                     pass
-                return {'ok':True,'x':xyz[0],'y':xyz[1],'z':xyz[2],'yaw':yaw,'time':time.time(),'connection':connection_info(read,world),'wave':wave_status(read,ptr,world)}
+                return {'ok':True,'x':xyz[0],'y':xyz[1],'z':xyz[2],'yaw':yaw,'time':time.time(),'connection':connection_info(read,world),'wave':wave_status(read,ptr,world),'radiation_level':radiation_status(read,ptr,world),'other_players':other_player_markers(read,ptr,world,pawn)}
             finally: os.close(fd)
         except (FileNotFoundError, ProcessLookupError): continue
         except PermissionError: raise RuntimeError('Cannot read game process; start the tracker with the same user and check Linux process permissions')
@@ -181,7 +231,7 @@ def resources(radius_m=100):
             if len(raw)!=n*8:continue
             for (actor,) in struct.iter_unpack('<Q',raw):
                 if not actor or actor in seen:continue
-                seen.add(actor);cls=u64(actor+0x10);classname=name(i32(cls+0x18))
+                seen.add(actor);cls=u64(actor+0x10);classname=name(i32(cls+0x18));is_foundable=False
                 # Ground deposits use socket actors; the generic socket does not name its mineral.
                 if classname in ('BP_OreSocket_C','BP_GoethiteOreSocket_C'):
                     kind='Goethite deposit' if classname=='BP_GoethiteOreSocket_C' else 'Ore deposit (type unknown)'
@@ -196,11 +246,15 @@ def resources(radius_m=100):
                     resource=u64(actor+0x2d8);kind=ORE_CHUNKS.get(name(i32(resource+0x18))) if resource else None
                     is_socket=False
                     is_ore_chunk=True
+                elif classname.startswith('BP_Foundable_Drone_') and classname.endswith('_C'):
+                    kind='Drone Wreck';is_socket=False;is_ore_chunk=False;is_foundable=True
                 elif 'meteore' in classname.lower() and is_meteor_class(cls):
                     kind='Meteorite';is_socket=False;is_ore_chunk=True
                 else:continue
                 if not kind:continue
-                root=u64(actor+0x1b8);rawpos=read(root+0x140,24)
+                root=u64(actor+0x1b8)
+                if is_foundable and u64(root+0xc8):continue
+                rawpos=read(root+0x140,24)
                 if len(rawpos)!=24:continue
                 x,y,zpos=struct.unpack('<ddd',rawpos)
                 if not all(math.isfinite(v) and abs(v)<1e7 for v in (x,y,zpos)):continue
@@ -208,10 +262,36 @@ def resources(radius_m=100):
                 if is_socket:
                     matches=[row for row in ORE_CATALOG if abs(row[0]-x)<=50 and abs(row[1]-y)<=50]
                     if len(matches)==1:kind=matches[0][2]+' deposit'
-                flag=read(actor+0x320,1) if kind=='Meteorite' else (read(actor+0x31d,1) if not is_socket and not is_ore_chunk else b'')
+                flag=read(actor+0x320,1) if kind=='Meteorite' else (read(actor+0x31d,1) if not is_socket and not is_ore_chunk and not is_foundable else b'')
                 out.append({'type':kind,'x':round(x,1),'y':round(y,1),'depleted':bool(flag[0]) if len(flag)==1 else None})
+        # Replicated map foundables: type 1 is a pre-placed lootable dead body.
+        try:
+            state=u64(world+0x1b0);helper=u64(state+0x368)
+            marker_array=u64(helper+0x698);marker_count=i32(helper+0x6a0)
+            if 0<=marker_count<=10000 and (marker_count==0 or marker_array):
+                for index in range(marker_count):
+                    data=read(marker_array+index*0x28+0x18,9)
+                    if len(data)!=9:continue
+                    x,y,kind=struct.unpack('<ffB',data)
+                    if kind==1 and all(math.isfinite(v) and abs(v)<1e7 for v in (x,y)):
+                        out.append({'type':'Dead Body (foundable)','x':round(x,1),'y':round(y,1),'depleted':None})
+        except (OSError,RuntimeError,struct.error):pass
         return {'ok':True,'resources':out,'radius_m':radius_m,'time':time.time()}
     finally:os.close(fd)
+
+def infection_hud():
+    for entry in Path('/proc').iterdir():
+        if not entry.name.isdigit():continue
+        try:
+            if b'StarRuptureGameSteam-Win64-Shipping.exe' not in (entry/'cmdline').read_bytes():continue
+            match=re.search(r'^([0-9a-f]+)-[0-9a-f]+\s+\S+\s+00000000\s+.*StarRuptureGameSteam-Win64-Shipping\.exe$',(entry/'maps').read_text(),re.M)
+            if not match:continue
+            fd=os.open(entry/'mem',os.O_RDONLY)
+            try:return {'ok':True, **infection_tracker.status(fd,int(match.group(1),16))}
+            finally:os.close(fd)
+        except (FileNotFoundError,ProcessLookupError):continue
+        except PermissionError:raise RuntimeError('Cannot read game process')
+    raise RuntimeError('Game process unavailable')
 
 def buildings(scan_rails=False):
     player=position()
@@ -223,6 +303,21 @@ def buildings(scan_rails=False):
             if not match:continue
             fd=os.open(entry/'mem',os.O_RDONLY)
             try:return building_tracker.scan(fd,int(match.group(1),16),player,scan_rails=scan_rails)
+            finally:os.close(fd)
+        except (FileNotFoundError,ProcessLookupError):continue
+        except PermissionError:raise RuntimeError('Cannot read game process')
+    raise RuntimeError('Game process unavailable')
+
+def death_drops():
+    player=position()
+    for entry in Path('/proc').iterdir():
+        if not entry.name.isdigit():continue
+        try:
+            if b'StarRuptureGameSteam-Win64-Shipping.exe' not in (entry/'cmdline').read_bytes():continue
+            match=re.search(r'^([0-9a-f]+)-[0-9a-f]+\s+\S+\s+00000000\s+.*StarRuptureGameSteam-Win64-Shipping\.exe$',(entry/'maps').read_text(),re.M)
+            if not match:continue
+            fd=os.open(entry/'mem',os.O_RDONLY)
+            try:return building_tracker.scan(fd,int(match.group(1),16),player,scan_drops=True)
             finally:os.close(fd)
         except (FileNotFoundError,ProcessLookupError):continue
         except PermissionError:raise RuntimeError('Cannot read game process')
@@ -290,8 +385,8 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.headers.get('Host', '') not in (f'127.0.0.1:{self.server.server_port}', f'localhost:{self.server.server_port}'):
             self.send_error(403); return
-        if self.path in ('/api/position','/api/resources','/api/objectives','/api/buildings','/api/rails','/api/bases'):
-            try: payload=position() if self.path=='/api/position' else (resources() if self.path=='/api/resources' else (objectives() if self.path=='/api/objectives' else (base_data() if self.path=='/api/bases' else buildings(self.path=='/api/rails'))))
+        if self.path in ('/api/position','/api/resources','/api/objectives','/api/buildings','/api/rails','/api/bases','/api/infection-hud','/api/death-drops'):
+            try: payload=death_drops() if self.path=='/api/death-drops' else infection_hud() if self.path=='/api/infection-hud' else (position() if self.path=='/api/position' else (resources() if self.path=='/api/resources' else (objectives() if self.path=='/api/objectives' else (base_data() if self.path=='/api/bases' else buildings(self.path=='/api/rails')))))
             except Exception as exc: payload={'ok':False,'error':str(exc)}
             body=json.dumps(payload).encode();self.send_response(200);self.send_header('Content-Type','application/json');self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.end_headers();self.wfile.write(body)
         else: super().do_GET()

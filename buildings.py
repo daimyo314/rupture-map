@@ -44,7 +44,7 @@ def friendly_name(classname):
     name = re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', name)
     return name.strip() or 'Building'
 
-def scan(fd, base, player, radius_m=100, scan_rails=False, scan_cysts=False):
+def scan(fd, base, player, radius_m=100, scan_rails=False, scan_cysts=False, scan_drops=False):
     def read(addr, size):
         if not 0x10000 <= addr < 0x7fffffffffff:
             return b''
@@ -119,6 +119,17 @@ def scan(fd, base, player, radius_m=100, scan_rails=False, scan_cysts=False):
                 continue
             seen.add(actor)
             is_building, classname = classify(u64(actor + 0x10))
+            if scan_drops:
+                if classname not in ('BP_DeathDropItem_C','BP_DeathDropItem_Scientist_C','BP_DeathDropItem_Soldier_C','BP_DeathDropItem_Medic_C','BP_DeathDropItem_Engineer_C'):
+                    continue
+                root=u64(actor+0x1b8)
+                if not root or u64(root+0xc8):continue
+                raw=read(root+0x140,24)
+                if len(raw)!=24:continue
+                x,y,z=struct.unpack('<ddd',raw)
+                if not all(math.isfinite(v) and abs(v)<1e7 for v in (x,y,z)):continue
+                result.append({'key':f'deathdrop:{round(x/100)}:{round(y/100)}:{round(z/100)}','x':x,'y':y,'z':z})
+                continue
             if scan_cysts:
                 if classname not in ('BP_InfectionCyst_C', 'BP_InfectionCyst_WorldExterior_C', 'BP_StandaloneInfectionCyst_C'):
                     continue
@@ -164,4 +175,4 @@ def scan(fd, base, player, radius_m=100, scan_rails=False, scan_cysts=False):
             keys.add(key)
             result.append({'key': key, 'type': friendly_name(classname), 'category': categorize(classname),
                            'x': round(x, 1), 'y': round(y, 1), 'z': round(z, 1)})
-    return {'ok': True, ('cysts' if scan_cysts else ('routes' if scan_rails else 'buildings')): result, 'radius_m': radius_m, 'skipped_attached': skipped_attached}
+    return {'ok': True, ('drops' if scan_drops else ('cysts' if scan_cysts else ('routes' if scan_rails else 'buildings'))): result, 'radius_m': radius_m, 'skipped_attached': skipped_attached}

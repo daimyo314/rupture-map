@@ -1,0 +1,99 @@
+{
+  "2202AFCB-4AB02453-7E291393-28E04C91": {
+    "name": "Welcome to Arcadia-7",
+    "subobjectives": [
+      "Exit the lander to start the training"
+    ]
+  },
+  "F743AF51-00000000-00000000-00000000": {
+    "name": "Collect Meteor Heart",
+    "subobjectives": [
+      "Explore the planet to find the Meteorite",
+      "Obtain Meteor Heart"
+    ]
+  },
+  "FC0C1CF9-00000000-00000000-00000000": {
+    "name": "Build Base Core",
+    "subobjectives": [
+      "Equip the Building Tool and choose the [Base Core] from the menu",
+      "Place the [Base Core] to set up the central point of your base"
+    ]
+  },
+  "B42C20C2-4796C141-9B646FA9-6EB99D2A": {
+    "name": "Create Basic Building Materials",
+    "subobjectives": [
+      "Find and collect Titanium Ore",
+      "Find and collect Wolfram Ore",
+      "Use [Basic Item Printer] in the Lander to create Basic Building Materials"
+    ]
+  },
+  "5F89E042-00000000-00000000-00000000": {
+    "name": "Set up a Habitat",
+    "subobjectives": [
+      "Use the Building Tool to set up a [Habitat]",
+      "Build an [Airlock] into your [Habitat]",
+      "Build an [Basic Item Printer] in your Habitat"
+    ]
+  },
+  "003ED5FE-447E2728-B776D6BC-01DA61D9": {
+    "name": "Unlock new Buildings",
+    "subobjectives": [
+      "Build a [Corporate Terminal] inside your Habitat",
+      "Use the [Corporate Terminal] to claim Level 1 rewards"
+    ]
+  },
+  "642FB80D-4F39190E-AC66CFB0-1FBE75CB": {
+    "name": "Set Up Orbital Cargo Launcher",
+    "subobjectives": [
+      "Build an [Orbital Cargo Launcher (OCL)]",
+      "Build a Power Supply for the [OCL]",
+      "Select a commission in the [OCL]",
+      "Supply the [OCL] with the required items"
+    ]
+  },
+  "809924B1-4646D9F3-1E04E798-E26CF98D": {
+    "name": "Reach level 2",
+    "subobjectives": [
+      "Reach level 2 in [Corporate Terminal]",
+      "Claim rewards in [Corporate Terminal]"
+    ]
+  },
+  "BBF29BA2-41F3D5F9-11840F83-BE42E28C": {
+    "name": "Set up auto-mining",
+    "subobjectives": [
+      "Build an [Ore Excavator] on a Titanium Ore deposit",
+      "Connect the [Excavator] with the [OCL] using [Drone Rails]",
+      "Provide enough power for your buildings to operate",
+      "Select a commision in [OCL]",
+      "Reach Corporation Level 3"
+    ]
+  },
+  "DC6A919A-4CCBB9FC-6C8A8C8A-00DCEC45": {
+    "name": "Set up an Analyzing Station",
+    "subobjectives": [
+      "Claim rewards",
+      "Set up an [Analyzing Station]",
+      "Explore the planet in search of plants",
+      "Analyze any plant in the [Analyzing Station]"
+    ]
+  },
+  "C81D92DA-4CCBB9FC-6C8A8C8A-00DCEC45": {
+    "name": "Reach level 4 with Data Points",
+    "subobjectives": [
+      "Use Data Points to gain reputation in the [Corporate Terminal]",
+      "Reach Level 4 using Data Points"
+    ]
+  },
+  "A8D922FA-439AA79C-112DA897-4D7B1C5D": {
+    "name": "Set up Production",
+    "subobjectives": [
+      "Deconstruct [Rail] between [Excavator] and [Orbital Cargo Launcher]",
+      "Build a [Smelter]",
+      "Connect the [Excavator] to the [Smelter] and the [OCL]",
+      "Select Titanium Bar recipe in [Smelter]",
+      "Select a commision in [OCL]",
+      "Produce Titanium Bars",
+      "Reach level 5 and claim the rewards"
+    ]
+  }
+}
